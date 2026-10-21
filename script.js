@@ -6,33 +6,53 @@ document.addEventListener("DOMContentLoaded", () => {
   const yearElement = document.getElementById("year");
   const progressBar = document.getElementById("siteProgress");
 
-  // Automatically update the footer year
+  const reduceMotion = window.matchMedia(
+    "(prefers-reduced-motion: reduce)"
+  ).matches;
+
+  /* =========================================
+     1. AUTOMATIC FOOTER YEAR
+     ========================================= */
+
   if (yearElement) {
     yearElement.textContent = new Date().getFullYear();
   }
 
-  // Mobile navigation
+  /* =========================================
+     2. MOBILE NAVIGATION
+     ========================================= */
+
   if (menuToggle && nav) {
     const closeMenu = () => {
       nav.classList.remove("active");
+
       menuToggle.setAttribute("aria-expanded", "false");
       menuToggle.setAttribute("aria-label", "باز کردن منو");
     };
 
-    menuToggle.addEventListener("click", () => {
-      const isOpen = nav.classList.toggle("active");
+    const openMenu = () => {
+      nav.classList.add("active");
 
-      menuToggle.setAttribute("aria-expanded", String(isOpen));
-      menuToggle.setAttribute(
-        "aria-label",
-        isOpen ? "بستن منو" : "باز کردن منو"
-      );
+      menuToggle.setAttribute("aria-expanded", "true");
+      menuToggle.setAttribute("aria-label", "بستن منو");
+    };
+
+    menuToggle.addEventListener("click", () => {
+      const isOpen = nav.classList.contains("active");
+
+      if (isOpen) {
+        closeMenu();
+      } else {
+        openMenu();
+      }
     });
 
+    // Close the menu after selecting a navigation link
     nav.querySelectorAll("a").forEach((link) => {
       link.addEventListener("click", closeMenu);
     });
 
+    // Close the menu when clicking outside it
     document.addEventListener("click", (event) => {
       if (
         nav.classList.contains("active") &&
@@ -43,82 +63,185 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     });
 
+    // Close the menu using the Escape key
     document.addEventListener("keydown", (event) => {
       if (event.key === "Escape") {
         closeMenu();
       }
     });
 
+    // Close the mobile menu when returning to desktop
     window.addEventListener("resize", () => {
       if (window.innerWidth > 760) {
         closeMenu();
       }
     });
+
+    // Keep the initial accessibility state consistent
+    menuToggle.setAttribute("aria-expanded", "false");
+    menuToggle.setAttribute("aria-label", "باز کردن منو");
   }
 
-  // Reveal sections smoothly as they enter the viewport
-  const revealElements = document.querySelectorAll(".reveal");
-  const reduceMotion = window.matchMedia(
-    "(prefers-reduced-motion: reduce)"
-  ).matches;
+  /* =========================================
+     3. SMOOTH SECTION REVEAL
+     ========================================= */
 
-  if ("IntersectionObserver" in window && !reduceMotion) {
+  const revealElements = document.querySelectorAll(".reveal");
+
+  if (reduceMotion || !("IntersectionObserver" in window)) {
+    revealElements.forEach((element) => {
+      element.classList.add("is-visible");
+    });
+  } else {
     const revealObserver = new IntersectionObserver(
       (entries, observer) => {
         entries.forEach((entry) => {
-          if (entry.isIntersecting) {
-            entry.target.classList.add("is-visible");
-            observer.unobserve(entry.target);
+          if (!entry.isIntersecting) {
+            return;
           }
+
+          entry.target.classList.add("is-visible");
+          observer.unobserve(entry.target);
         });
       },
       {
-        threshold: 0.12,
-        rootMargin: "0px 0px -35px 0px"
+        threshold: 0.1,
+        rootMargin: "0px 0px -30px 0px"
       }
     );
 
     revealElements.forEach((element) => {
       revealObserver.observe(element);
     });
-  } else {
-    // Keep content visible if animations are unavailable or disabled
-    revealElements.forEach((element) => {
-      element.classList.add("is-visible");
-    });
   }
 
-  // Reading progress indicator
+  /* =========================================
+     4. SCROLL PROGRESS BAR
+     ========================================= */
+
   let progressTicking = false;
 
   const updateProgress = () => {
     if (!progressBar) {
+      progressTicking = false;
       return;
     }
 
+    const documentHeight =
+      document.documentElement.scrollHeight;
+
+    const viewportHeight = window.innerHeight;
+
     const scrollableHeight =
-      document.documentElement.scrollHeight - window.innerHeight;
+      documentHeight - viewportHeight;
+
+    const scrollPosition =
+      window.scrollY ||
+      document.documentElement.scrollTop ||
+      0;
 
     const progress =
       scrollableHeight > 0
-        ? (window.scrollY / scrollableHeight) * 100
+        ? (scrollPosition / scrollableHeight) * 100
         : 0;
 
-    progressBar.style.width = `${Math.min(100, Math.max(0, progress))}%`;
+    progressBar.style.width =
+      `${Math.min(100, Math.max(0, progress))}%`;
+
     progressTicking = false;
+  };
+
+  const requestProgressUpdate = () => {
+    if (progressTicking) {
+      return;
+    }
+
+    progressTicking = true;
+    window.requestAnimationFrame(updateProgress);
   };
 
   window.addEventListener(
     "scroll",
-    () => {
-      if (!progressTicking) {
-        window.requestAnimationFrame(updateProgress);
-        progressTicking = true;
-      }
-    },
+    requestProgressUpdate,
     { passive: true }
   );
 
-  window.addEventListener("resize", updateProgress);
+  window.addEventListener(
+    "resize",
+    requestProgressUpdate,
+    { passive: true }
+  );
+
+  window.addEventListener(
+    "load",
+    requestProgressUpdate
+  );
+
   updateProgress();
+
+  /* =========================================
+     5. HEADER SCROLL EFFECT
+     ========================================= */
+
+  const header = document.querySelector(".site-header");
+
+  if (header) {
+    let headerTicking = false;
+
+    const updateHeader = () => {
+      header.classList.toggle(
+        "is-scrolled",
+        window.scrollY > 20
+      );
+
+      headerTicking = false;
+    };
+
+    const requestHeaderUpdate = () => {
+      if (headerTicking) {
+        return;
+      }
+
+      headerTicking = true;
+      window.requestAnimationFrame(updateHeader);
+    };
+
+    window.addEventListener(
+      "scroll",
+      requestHeaderUpdate,
+      { passive: true }
+    );
+
+    updateHeader();
+  }
+
+  /* =========================================
+     6. OPTIONAL IMAGE LOAD POLISH
+     ========================================= */
+
+  const portraitImage = document.querySelector(
+    ".portrait-image"
+  );
+
+  if (portraitImage) {
+    const markImageReady = () => {
+      portraitImage.classList.add("is-loaded");
+    };
+
+    if (portraitImage.complete && portraitImage.naturalWidth > 0) {
+      markImageReady();
+    } else {
+      portraitImage.addEventListener(
+        "load",
+        markImageReady,
+        { once: true }
+      );
+    }
+  }
+
+  /* =========================================
+     7. CURRENT YEAR AND INTERACTIONS READY
+     ========================================= */
+
+  document.documentElement.classList.add("js-ready");
 });
